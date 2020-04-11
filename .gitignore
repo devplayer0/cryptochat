@@ -1,0 +1,4 @@
+/internal/data/*
+!/internal/data/.gitkeep
+/bin/*
+!/bin/.gitkeep
