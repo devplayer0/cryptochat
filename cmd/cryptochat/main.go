@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"os"
 	"os/signal"
 
@@ -10,20 +11,26 @@ import (
 )
 
 func main() {
-	srv := server.NewServer()
-	srv.Start()
+	dbPath := flag.String("db", "data.db", "path to sqlite database file")
+	addr := flag.String("addr", ":9443", "api listen address")
+	flag.Parse()
+
+	srv, err := server.NewServer(*dbPath)
+	if err != nil {
+		log.WithError(err).Fatal("Failed to start server")
+	}
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, unix.SIGINT, unix.SIGTERM)
 
 	go func() {
 		log.Info("Starting server...")
-		if err := srv.Start(); err != nil {
-			log.WithField("error", err).Fatal("Failed to start server")
+		if err := srv.Listen(*addr); err != nil {
+			log.WithError(err).Fatal("Failed to start server")
 		}
 	}()
 
 	<-sigs
 	log.Info("Shutting down...")
-	srv.Stop()
+	srv.Close()
 }

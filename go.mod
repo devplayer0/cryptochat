@@ -6,7 +6,9 @@ require (
 	github.com/fatih/color v1.9.0 // indirect
 	github.com/githubnemo/CompileDaemon v1.0.0 // indirect
 	github.com/go-bindata/go-bindata v3.1.2+incompatible // indirect
+	github.com/google/uuid v1.1.1
 	github.com/howeyc/fsnotify v0.9.0 // indirect
+	github.com/mattn/go-sqlite3 v2.0.3+incompatible
 	github.com/sirupsen/logrus v1.5.0
 	golang.org/x/sys v0.0.0-20191026070338-33540a1f6037
 )

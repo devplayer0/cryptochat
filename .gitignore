@@ -2,3 +2,4 @@
 !/internal/data/.gitkeep
 /bin/*
 !/bin/.gitkeep
+/data.db

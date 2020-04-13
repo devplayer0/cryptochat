@@ -7,13 +7,13 @@ default: binary
 dev:
 	go mod download
 	go-bindata -debug $(BINDATA_FLAGS)
-	CompileDaemon -exclude-dir=.git -build="go build -o bin/cryptochat ./cmd/cryptochat" -command=bin/cryptochat \
+	CGO_ENABLED=1 CompileDaemon -exclude-dir=.git -build="go build -o bin/cryptochat ./cmd/cryptochat" -command=bin/cryptochat \
     	-graceful-kill
 
 binary:
 	go mod download
 	go-bindata $(BINDATA_FLAGS)
-	go build -ldflags '-s -w' -o bin/cryptochat ./cmd/cryptochat
+	CGO_ENABLED=1 go build -ldflags '-s -w' -o bin/cryptochat ./cmd/cryptochat
 
 clean:
 	-rm -f bin/*
