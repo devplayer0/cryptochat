@@ -66,6 +66,9 @@ func (s *Server) loadCert() (tls.Certificate, error) {
 		}
 	}
 
+	if certDER == nil || keyDER == nil {
+		return c, fmt.Errorf("failed to find cert and key in database: %w", err)
+	}
 	return LoadCert(certDER, keyDER)
 }
 

@@ -10,6 +10,7 @@ import (
 
 	// SQLite driver
 	_ "github.com/mattn/go-sqlite3"
+	"golang.org/x/sys/unix"
 )
 
 const rsaBits int = 2048
@@ -25,9 +26,9 @@ type Server struct {
 
 // NewServer creates a new Server
 func NewServer(dbPath string) (*Server, error) {
-	dbInitRequired := false
+	oldMask := -1
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		dbInitRequired = true
+		oldMask = unix.Umask(0066)
 	}
 
 	db, err := sql.Open("sqlite3", dbPath)
@@ -38,10 +39,11 @@ func NewServer(dbPath string) (*Server, error) {
 		db: db,
 	}
 
-	if dbInitRequired {
+	if oldMask != -1 {
 		if err := s.dbInit(); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to initialize database: %w", err)
 		}
+		unix.Umask(oldMask)
 	}
 
 	cert, err := s.loadCert()
