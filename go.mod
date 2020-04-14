@@ -10,6 +10,7 @@ require (
 	github.com/google/uuid v1.1.1
 	github.com/howeyc/fsnotify v0.9.0 // indirect
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible
+	github.com/r3labs/sse v0.0.0-20200310095403-ee05428e4d0e
 	github.com/sirupsen/logrus v1.5.0
 	golang.org/x/lint v0.0.0-20200302205851-738671d3881b // indirect
 	golang.org/x/sys v0.0.0-20191026070338-33540a1f6037

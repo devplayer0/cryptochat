@@ -11,6 +11,7 @@ import (
 	// SQLite driver
 	"github.com/containous/mux"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/r3labs/sse"
 	"golang.org/x/sys/unix"
 )
 
@@ -24,7 +25,8 @@ type Server struct {
 	cert *tls.Certificate
 	api  http.Server
 
-	ui http.Server
+	ui     http.Server
+	events *sse.Server
 }
 
 // NewServer creates a new Server
@@ -58,6 +60,11 @@ func NewServer(dbPath string) (*Server, error) {
 	s.cert = &s.api.TLSConfig.Certificates[0]
 
 	uiRouter := mux.NewRouter()
+
+	s.events = sse.New()
+	s.events.CreateStream(streamMessages)
+	uiRouter.HandleFunc("/api/events", s.events.HTTPHandler).Methods(http.MethodGet)
+
 	uiRouter.PathPrefix("/").Handler(newSPAHandler())
 
 	s.ui = http.Server{
@@ -91,6 +98,7 @@ func (s *Server) Listen(addr, uiAddr string) error {
 
 // Close ends listening
 func (s *Server) Close() error {
+	s.events.Close()
 	if err := s.ui.Close(); err != nil {
 		return fmt.Errorf("failed to close frontend server: %w", err)
 	}

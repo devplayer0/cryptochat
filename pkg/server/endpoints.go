@@ -1,55 +1,36 @@
 package server
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
-	"path"
-	"strings"
 
-	"github.com/devplayer0/cryptochat/internal/data"
+	log "github.com/sirupsen/logrus"
 )
 
-type spaHandler struct {
-	fs    http.Handler
-	inner http.Handler
+// JSONResponse Sends a JSON payload in response to a HTTP request
+func JSONResponse(w http.ResponseWriter, v interface{}, statusCode int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+
+	enc := json.NewEncoder(w)
+	if err := enc.Encode(v); err != nil {
+		log.WithField("err", err).Error("Failed to serialize JSON payload")
+
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, "Failed to serialize JSON payload")
+	}
 }
 
-func newSPAHandler() spaHandler {
-	h := spaHandler{
-		fs: http.FileServer(data.AssetFile()),
-	}
-	h.inner = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, err := data.Asset(r.URL.Path); err != nil {
-			// file does not exist, serve index.html
-			if _, err := w.Write(data.MustAsset("index.html")); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-			}
-			return
-		}
-
-		// otherwise, use http.FileServer to serve the static dir
-		h.fs.ServeHTTP(w, r)
-	})
-
-	return h
+type jsonError struct {
+	Message string `json:"message"`
 }
-func (h spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	upath := r.URL.Path
-	if !strings.HasPrefix(upath, "/") {
-		upath = "/" + upath
-	}
-	upath = path.Clean(upath)
-	r.URL.Path = upath
 
-	if r.URL.Path == "/" {
-		if _, err := w.Write(data.MustAsset("index.html")); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-		return
-	}
+// JSONErrResponse Sends an `error` as a JSON object with a `message` property
+func JSONErrResponse(w http.ResponseWriter, err error, statusCode int) {
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(statusCode)
 
-	handler := h.inner
-	if strings.HasPrefix(r.URL.Path, "/assets/") {
-		handler = http.StripPrefix("/assets/", handler)
-	}
-	handler.ServeHTTP(w, r)
+	enc := json.NewEncoder(w)
+	enc.Encode(jsonError{err.Error()})
 }
