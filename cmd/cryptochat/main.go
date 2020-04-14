@@ -13,6 +13,7 @@ import (
 func main() {
 	dbPath := flag.String("db", "data.db", "path to sqlite database file")
 	addr := flag.String("addr", ":9443", "api listen address")
+	uiAddr := flag.String("uiaddr", "127.0.0.1:9080", "ui listen address")
 	flag.Parse()
 
 	srv, err := server.NewServer(*dbPath)
@@ -25,7 +26,7 @@ func main() {
 
 	go func() {
 		log.Info("Starting server...")
-		if err := srv.Listen(*addr); err != nil {
+		if err := srv.Listen(*addr, *uiAddr); err != nil {
 			log.WithError(err).Fatal("Failed to start server")
 		}
 	}()

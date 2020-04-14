@@ -3,3 +3,6 @@
 /bin/*
 !/bin/.gitkeep
 /data.db
+/client/js/vue.js
+/client/js/vue-router.js
+/client/css/bootstrap.min.css

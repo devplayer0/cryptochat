@@ -1,8 +1,27 @@
 <html>
-    <head>
-        <title>Hello, world!</title>
-    </head>
-    <body>
+  <head>
+    <meta charset="utf-8" />
+    <title>CryptoChat</title>
 
-    </body>
+    <link rel="stylesheet" href="/assets/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/assets/css/main.css">
+  </head>
+  <body>
+    <div id="app">
+      <nav class="navbar navbar-dark bg-dark navbar-expand-md fixed-top">
+        <router-link class="navbar-brand" to="/messages">CryptoChat</router-link>
+        <div class="navbar-nav">
+          <router-link class="nav-item nav-link" active-class="active" to="/messages">Messages</router-link>
+        </div>
+      </nav>
+      <main role="main" class="container">
+        <router-view></router-view>
+      </main>
+    </div>
+
+    <script src="/assets/js/vue.js"></script>
+    <script src="/assets/js/vue-router.js"></script>
+
+    <script src="/assets/js/main.js"></script>
+  </body>
 </html>

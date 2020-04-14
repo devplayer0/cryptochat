@@ -9,6 +9,7 @@ import (
 	"time"
 
 	// SQLite driver
+	"github.com/containous/mux"
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/sys/unix"
 )
@@ -21,7 +22,9 @@ type Server struct {
 	db *sql.DB
 
 	cert *tls.Certificate
-	http http.Server
+	api  http.Server
+
+	ui http.Server
 }
 
 // NewServer creates a new Server
@@ -47,32 +50,56 @@ func NewServer(dbPath string) (*Server, error) {
 	}
 
 	cert, err := s.loadCert()
-	s.http = http.Server{
+	s.api = http.Server{
 		TLSConfig: &tls.Config{
 			Certificates: []tls.Certificate{cert},
 		},
 	}
-	s.cert = &s.http.TLSConfig.Certificates[0]
+	s.cert = &s.api.TLSConfig.Certificates[0]
+
+	uiRouter := mux.NewRouter()
+	uiRouter.PathPrefix("/").Handler(newSPAHandler())
+
+	s.ui = http.Server{
+		Handler: uiRouter,
+	}
 
 	return &s, nil
 }
 
 // Listen begins listening
-func (s *Server) Listen(addr string) error {
-	s.http.Addr = addr
-	if err := s.http.ListenAndServeTLS("", ""); err != http.ErrServerClosed {
+func (s *Server) Listen(addr, uiAddr string) error {
+	s.api.Addr = addr
+	s.ui.Addr = uiAddr
+
+	err := make(chan error)
+	go func() {
+		err <- s.api.ListenAndServeTLS("", "")
+		s.api.Close()
+	}()
+	go func() {
+		err <- s.ui.ListenAndServe()
+		s.ui.Close()
+	}()
+
+	if err := <-err; err != http.ErrServerClosed {
 		return err
 	}
+
 	return nil
 }
 
 // Close ends listening
 func (s *Server) Close() error {
+	if err := s.ui.Close(); err != nil {
+		return fmt.Errorf("failed to close frontend server: %w", err)
+	}
+	if err := s.api.Close(); err != nil {
+		return fmt.Errorf("failed to close api server: %w", err)
+	}
+
 	if err := s.db.Close(); err != nil {
 		return fmt.Errorf("failed to close database: %w", err)
-	}
-	if err := s.http.Close(); err != nil {
-		return fmt.Errorf("failed to close http server: %w", err)
 	}
 	return nil
 }
