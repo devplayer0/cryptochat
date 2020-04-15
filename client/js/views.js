@@ -3,7 +3,7 @@ Vue.component('NotFound', {
     <div>
       <h1>Not Found</h1>
       <p class="lead">Couldn't find a matching visualization, sorry.</p>
-      <code>¯\\_(ツ)_/¯</code>
+      <code>¯\\_()_/¯</code>
     </div>
   `
 });
