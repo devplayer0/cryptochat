@@ -1,10 +1,12 @@
 package server
 
 import (
+	"context"
 	"crypto/tls"
 	"database/sql"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -21,6 +23,13 @@ import (
 const rsaBits int = 2048
 const certValidity = 365 * 24 * time.Hour
 
+type key int
+
+const (
+	keyServer key = iota
+	keyUser
+)
+
 func writeAccessLog(t string) func(w io.Writer, params handlers.LogFormatterParams) {
 	return func(w io.Writer, params handlers.LogFormatterParams) {
 		log.WithFields(log.Fields{
@@ -30,6 +39,22 @@ func writeAccessLog(t string) func(w io.Writer, params handlers.LogFormatterPara
 			"resSize": params.Size,
 		}).Debugf("%v %v %v", t, params.Request.Method, params.URL.RequestURI())
 	}
+}
+
+func userMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s := r.Context().Value(keyServer).(*Server)
+
+		u, err := s.getUser(r.TLS.PeerCertificates[0].Subject.CommonName)
+		if err != nil {
+			JSONErrResponse(w, fmt.Errorf("failed to internally retrieve connected user from TLS state: %w", err),
+				http.StatusInternalServerError)
+			return
+		}
+
+		r = r.WithContext(context.WithValue(r.Context(), keyUser, u))
+		next.ServeHTTP(w, r)
+	})
 }
 
 // Server is a CryptoChat server
@@ -86,6 +111,7 @@ func NewServer(dbPath, peerAddr string) (*Server, error) {
 	log.WithField("fingerprint", GetCertFingerprint(cert.Leaf)).Info("Loaded server certificate")
 
 	apiRouter := mux.NewRouter()
+	apiRouter.Use(userMiddleware)
 	apiRouter.HandleFunc("/rooms/{room}/message", s.apiSendMessage).Methods(http.MethodPost)
 
 	s.api = http.Server{
@@ -94,6 +120,9 @@ func NewServer(dbPath, peerAddr string) (*Server, error) {
 
 			ClientAuth:            tls.RequestClientCert,
 			VerifyPeerCertificate: s.verifyPeer,
+		},
+		BaseContext: func(_ net.Listener) context.Context {
+			return context.WithValue(context.Background(), keyServer, &s)
 		},
 		Handler: handlers.CustomLoggingHandler(nil, apiRouter, writeAccessLog("api")),
 	}

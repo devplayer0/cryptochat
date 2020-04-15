@@ -75,7 +75,13 @@ func (s *Server) publishJSON(stream string, v interface{}) error {
 	return nil
 }
 
+type uiMessageSender struct {
+	UUID     string `json:"uuid"`
+	Username string `json:"username"`
+}
 type uiEventMessage struct {
+	Sender uiMessageSender `json:"sender"`
+
 	Room    string `json:"room"`
 	Content string `json:"content"`
 }
@@ -112,7 +118,7 @@ func (s *Server) uiSendMessage(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	if err := JSONReq(s.client, http.MethodPost, fmt.Sprintf("https://%v/rooms/%v/message", s.peerAddr, vars["room"]),
-		apiReqSendMessage{req.Content}, nil); err != nil {
+		req, nil); err != nil {
 		JSONErrResponse(w, err, http.StatusInternalServerError)
 	}
 

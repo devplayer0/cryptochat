@@ -89,10 +89,13 @@ func JSONReq(c *http.Client, method, url string, b interface{}, r interface{}) e
 }
 
 type apiReqSendMessage struct {
-	Content string `json:"content"`
+	Username string `json:"username"`
+	Content  string `json:"content"`
 }
 
 func (s *Server) apiSendMessage(w http.ResponseWriter, r *http.Request) {
+	u := r.Context().Value(keyUser).(User)
+
 	var b apiReqSendMessage
 	if err := ParseJSONBody(&b, w, r); err != nil {
 		return
@@ -100,6 +103,10 @@ func (s *Server) apiSendMessage(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	s.publishJSON(streamMessages, uiEventMessage{
+		Sender: uiMessageSender{
+			Username: b.Username,
+			UUID:     u.UUID.String(),
+		},
 		Room:    vars["room"],
 		Content: b.Content,
 	})
