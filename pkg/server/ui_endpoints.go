@@ -117,6 +117,30 @@ func (s *Server) uiVerifyUser(w http.ResponseWriter, r *http.Request) {
 	JSONErrResponse(w, errors.New("user verification not in progress"), http.StatusBadRequest)
 }
 
+func (s *Server) uiRooms(w http.ResponseWriter, r *http.Request) {
+	JSONResponse(w, s.discovery.GetRooms(), http.StatusOK)
+}
+
+func (s *Server) uiRoomEdit(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	room := vars["room"]
+
+	switch r.Method {
+	case http.MethodPost:
+		if !s.discovery.AddRoom(room) {
+			JSONErrResponse(w, errors.New("already a member of this room"), http.StatusBadRequest)
+			return
+		}
+	case http.MethodDelete:
+		if !s.discovery.RemoveRoom(room) {
+			JSONErrResponse(w, errors.New("not a member of this room"), http.StatusBadRequest)
+			return
+		}
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) uiSendMessage(w http.ResponseWriter, r *http.Request) {
 	var req apiReqSendMessage
 	if err := ParseJSONBody(&req, w, r); err != nil {
@@ -124,9 +148,25 @@ func (s *Server) uiSendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vars := mux.Vars(r)
-	if err := JSONReq(s.client, http.MethodPost, fmt.Sprintf("https://%v/rooms/%v/message", s.peerAddr, vars["room"]),
-		req, nil); err != nil {
-		JSONErrResponse(w, err, http.StatusInternalServerError)
+	room := vars["room"]
+
+	rooms := s.discovery.GetRooms()
+	members, ok := rooms[room]
+	if !ok {
+		// nobody in this room
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	for _, m := range members {
+		if err := JSONReq(s.client, http.MethodPost, fmt.Sprintf("https://%v/rooms/%v/message", m.Addr, vars["room"]),
+			req, nil); err != nil {
+			log.WithFields(log.Fields{
+				"id":      m.UUID.String(),
+				"address": m.Addr,
+				"room":    room,
+			}).WithError(err).Error("Failed to send message to room member")
+		}
 	}
 
 	w.WriteHeader(http.StatusNoContent)

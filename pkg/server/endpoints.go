@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -102,6 +103,12 @@ func (s *Server) apiSendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vars := mux.Vars(r)
+	room := vars["room"]
+	if !s.discovery.IsMember(room) {
+		JSONErrResponse(w, errors.New("user is not a member of this room"), http.StatusBadRequest)
+		return
+	}
+
 	s.publishJSON(streamMessages, uiEventMessage{
 		Sender: uiMessageSender{
 			Username: b.Username,

@@ -72,12 +72,12 @@ type Server struct {
 	verificationLock sync.RWMutex
 	verification     map[uuid.UUID]chan struct{}
 
-	peerAddr string
-	client   *http.Client
+	discovery Discovery
+	client    *http.Client
 }
 
 // NewServer creates a new Server
-func NewServer(dbPath, peerAddr string) (*Server, error) {
+func NewServer(dbPath string) (*Server, error) {
 	oldMask := -1
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		oldMask = unix.Umask(0066)
@@ -88,8 +88,7 @@ func NewServer(dbPath, peerAddr string) (*Server, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 	s := Server{
-		db:       db,
-		peerAddr: peerAddr,
+		db: db,
 
 		verification: make(map[uuid.UUID]chan struct{}),
 	}
@@ -110,7 +109,15 @@ func NewServer(dbPath, peerAddr string) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to load certificate: %w", err)
 	}
-	log.WithField("fingerprint", GetCertFingerprint(cert.Leaf)).Info("Loaded server certificate")
+	id, err := uuid.Parse(cert.Leaf.Subject.CommonName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse UUID on internal certificate: %w", err)
+	}
+
+	log.WithFields(log.Fields{
+		"uuid":        id,
+		"fingerprint": GetCertFingerprint(cert.Leaf),
+	}).Info("Loaded server certificate")
 
 	apiRouter := mux.NewRouter()
 	apiRouter.Use(userMiddleware)
@@ -134,6 +141,8 @@ func NewServer(dbPath, peerAddr string) (*Server, error) {
 
 	uiAPI := uiRouter.PathPrefix("/api").Subrouter()
 	uiAPI.HandleFunc("/users/{uuid}/verify", s.uiVerifyUser).Methods(http.MethodPost)
+	uiAPI.HandleFunc("/rooms", s.uiRooms).Methods(http.MethodGet)
+	uiAPI.HandleFunc("/rooms/{room}", s.uiRoomEdit).Methods(http.MethodPost, http.MethodDelete)
 	uiAPI.HandleFunc("/rooms/{room}/message", s.uiSendMessage).Methods(http.MethodPost)
 
 	s.events = sse.New()
@@ -146,6 +155,8 @@ func NewServer(dbPath, peerAddr string) (*Server, error) {
 	s.ui = http.Server{
 		Handler: handlers.CustomLoggingHandler(nil, uiRouter, writeAccessLog("ui")),
 	}
+
+	s.discovery = NewDiscovery(id)
 
 	s.client = &http.Client{
 		Transport: &http.Transport{
@@ -166,17 +177,36 @@ func (s *Server) Listen(addr, uiAddr string) error {
 	s.api.Addr = addr
 	s.ui.Addr = uiAddr
 
-	err := make(chan error)
+	apiListener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("failed to start API TCP listener: %w", err)
+	}
+
+	uiListener, err := net.Listen("tcp", uiAddr)
+	if err != nil {
+		return fmt.Errorf("failed to start UI TCP listener: %w", err)
+	}
+
+	log.WithFields(log.Fields{
+		"api": apiListener.Addr(),
+		"ui":  uiListener.Addr(),
+	}).Info("Server now listening")
+
+	errCh := make(chan error)
 	go func() {
-		err <- s.api.ListenAndServeTLS("", "")
+		errCh <- s.api.ServeTLS(apiListener, "", "")
 		s.api.Close()
 	}()
 	go func() {
-		err <- s.ui.ListenAndServe()
+		errCh <- s.ui.Serve(uiListener)
 		s.ui.Close()
 	}()
+	go func() {
+		errCh <- s.discovery.Start(apiListener.Addr().(*net.TCPAddr).Port)
+		s.discovery.Close()
+	}()
 
-	if err := <-err; err != http.ErrServerClosed {
+	if err := <-errCh; err != http.ErrServerClosed {
 		return err
 	}
 
