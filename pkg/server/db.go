@@ -76,7 +76,7 @@ func (s *Server) loadCert() (tls.Certificate, error) {
 }
 
 type sqlStmts struct {
-	addUser, retrieveUser, verifyUser *sql.Stmt
+	addUser, retrieveUser, setUserVerified *sql.Stmt
 }
 
 func prepareSQLStatements(db *sql.DB) (sqlStmts, error) {
@@ -95,7 +95,7 @@ func prepareSQLStatements(db *sql.DB) (sqlStmts, error) {
 		return s, fmt.Errorf("failed to prepare user retrieval statement: %w", err)
 	}
 
-	s.verifyUser, err = db.Prepare("UPDATE users SET verified = true WHERE uuid = ?")
+	s.setUserVerified, err = db.Prepare("UPDATE users SET verified = ? WHERE uuid = ?")
 	if err != nil {
 		return s, fmt.Errorf("failed to prepare user verification statement: %w", err)
 	}
@@ -183,8 +183,8 @@ func (s *Server) userForCert(certDER []byte) (User, error) {
 	return u, nil
 }
 
-func (s *Server) markUserVerified(u *User) error {
-	if _, err := s.stmts.verifyUser.Exec(u.uuidBytes()); err != nil {
+func (s *Server) setUserVerified(u *User, verified bool) error {
+	if _, err := s.stmts.setUserVerified.Exec(verified, u.uuidBytes()); err != nil {
 		return err
 	}
 

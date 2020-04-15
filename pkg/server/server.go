@@ -141,7 +141,7 @@ func NewServer(dbPath string) (*Server, error) {
 
 	uiAPI := uiRouter.PathPrefix("/api").Subrouter()
 	uiAPI.HandleFunc("/info", s.uiInfo).Methods(http.MethodGet)
-	uiAPI.HandleFunc("/users/{uuid}/verify", s.uiVerifyUser).Methods(http.MethodPost)
+	uiAPI.HandleFunc("/users/{uuid}/verify", s.uiVerifyUser).Methods(http.MethodPost, http.MethodDelete)
 	uiAPI.HandleFunc("/rooms", s.uiRooms).Methods(http.MethodGet)
 	uiAPI.HandleFunc("/rooms/{room}", s.uiRoomEdit).Methods(http.MethodPost, http.MethodDelete)
 	uiAPI.HandleFunc("/rooms/{room}/message", s.uiSendMessage).Methods(http.MethodPost)

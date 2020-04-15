@@ -94,7 +94,7 @@ func (s *Server) uiVerifyUser(w http.ResponseWriter, r *http.Request) {
 	ch, ok := s.verification[u.UUID]
 	s.verificationLock.RUnlock()
 	if ok {
-		if err := s.markUserVerified(&u); err != nil {
+		if err := s.setUserVerified(&u, r.Method == http.MethodPost); err != nil {
 			JSONErrResponse(w, fmt.Errorf("failed"), http.StatusInternalServerError)
 			return
 		}
@@ -105,7 +105,7 @@ func (s *Server) uiVerifyUser(w http.ResponseWriter, r *http.Request) {
 
 		close(ch)
 
-		log.WithField("uuid", vars["uuid"]).Info("Marked user as verified")
+		log.WithField("uuid", vars["uuid"]).Info("Changed user verification status")
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
