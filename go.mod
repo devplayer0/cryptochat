@@ -3,11 +3,12 @@ module github.com/devplayer0/cryptochat
 go 1.14
 
 require (
-	github.com/containous/mux v0.0.0-20200408164629-f779179d490a
 	github.com/fatih/color v1.9.0 // indirect
 	github.com/githubnemo/CompileDaemon v1.0.0 // indirect
 	github.com/go-bindata/go-bindata/v3 v3.1.3 // indirect
 	github.com/google/uuid v1.1.1
+	github.com/gorilla/handlers v1.4.2
+	github.com/gorilla/mux v1.7.4
 	github.com/howeyc/fsnotify v0.9.0 // indirect
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible
 	github.com/r3labs/sse v0.0.0-20200310095403-ee05428e4d0e

@@ -3,12 +3,17 @@ package server
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha1"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // GenerateCert creates a TLS certificate and RSA private key
@@ -73,8 +78,56 @@ func LoadCert(cert, key []byte) (tls.Certificate, error) {
 		}
 	}
 
+	x509Cert, err := x509.ParseCertificate(cert)
+	if err != nil {
+		return c, fmt.Errorf("failed to parse X.509 certificate from DER: %w", err)
+	}
+
 	return tls.Certificate{
 		Certificate: [][]byte{cert},
 		PrivateKey:  priv,
+		Leaf:        x509Cert,
 	}, nil
+}
+
+// GetCertFingerprint gets an X.509 certificate's fingerprint
+func GetCertFingerprint(cert *x509.Certificate) string {
+	sum := sha1.Sum(cert.Raw)
+	return hex.EncodeToString(sum[:])
+}
+
+type verificationInfo struct {
+	UUID        string `json:"uuid"`
+	Fingerprint string `json:"fingerprint"`
+}
+
+func (s *Server) verifyPeer(certs [][]byte, _ [][]*x509.Certificate) error {
+	u, err := s.userForCert(certs[0])
+	if err != nil {
+		return err
+	}
+
+	if !u.Verified {
+		log.WithField("uuid", u.UUID.String()).Debug("Waiting for user verification")
+		if _, ok := s.verification[u.UUID]; !ok {
+			s.verification[u.UUID] = make(chan struct{}, 1)
+			s.publishJSON(streamVerification, verificationInfo{
+				UUID:        u.UUID.String(),
+				Fingerprint: GetCertFingerprint(u.Cert),
+			})
+		}
+
+		<-s.verification[u.UUID]
+		u, err := s.userForCert(certs[0])
+		if err != nil {
+			return err
+		}
+
+		if !u.Verified {
+			return errors.New("verification was rejected")
+		}
+	}
+
+	log.WithField("uuid", u.UUID.String()).Debug("Peer verification passed")
+	return nil
 }

@@ -2,15 +2,19 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"path"
 	"strings"
 
 	"github.com/devplayer0/cryptochat/internal/data"
+	"github.com/gorilla/mux"
 	"github.com/r3labs/sse"
+	log "github.com/sirupsen/logrus"
 )
 
+const streamVerification = "verification"
 const streamMessages = "messages"
 
 type spaHandler struct {
@@ -69,4 +73,48 @@ func (s *Server) publishJSON(stream string, v interface{}) error {
 		Data: enc,
 	})
 	return nil
+}
+
+type uiEventMessage struct {
+	Room    string `json:"room"`
+	Content string `json:"content"`
+}
+
+func (s *Server) uiVerifyUser(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	u, err := s.getUser(vars["uuid"])
+	if err != nil {
+		JSONErrResponse(w, fmt.Errorf("failed to get user: %w", err), http.StatusInternalServerError)
+		return
+	}
+
+	if ch, ok := s.verification[u.UUID]; ok {
+		if err := s.markUserVerified(&u); err != nil {
+			JSONErrResponse(w, fmt.Errorf("failed"), http.StatusInternalServerError)
+			return
+		}
+		delete(s.verification, u.UUID)
+		close(ch)
+
+		log.WithField("uuid", vars["uuid"]).Info("Marked user as verified")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	JSONErrResponse(w, errors.New("user verification not in progress"), http.StatusBadRequest)
+}
+
+func (s *Server) uiSendMessage(w http.ResponseWriter, r *http.Request) {
+	var req apiReqSendMessage
+	if err := ParseJSONBody(&req, w, r); err != nil {
+		return
+	}
+
+	vars := mux.Vars(r)
+	if err := JSONReq(s.client, http.MethodPost, fmt.Sprintf("https://%v/rooms/%v/message", s.peerAddr, vars["room"]),
+		apiReqSendMessage{req.Content}, nil); err != nil {
+		JSONErrResponse(w, err, http.StatusInternalServerError)
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }

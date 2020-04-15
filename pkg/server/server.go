@@ -4,33 +4,53 @@ import (
 	"crypto/tls"
 	"database/sql"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"time"
 
-	// SQLite driver
-	"github.com/containous/mux"
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/google/uuid"
+	"github.com/gorilla/handlers"
+	"github.com/gorilla/mux"
+	_ "github.com/mattn/go-sqlite3" // SQLite driver
 	"github.com/r3labs/sse"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
 
 const rsaBits int = 2048
 const certValidity = 365 * 24 * time.Hour
 
+func writeAccessLog(t string) func(w io.Writer, params handlers.LogFormatterParams) {
+	return func(w io.Writer, params handlers.LogFormatterParams) {
+		log.WithFields(log.Fields{
+			"remote":  params.Request.RemoteAddr,
+			"agent":   params.Request.UserAgent(),
+			"status":  params.StatusCode,
+			"resSize": params.Size,
+		}).Debugf("%v %v %v", t, params.Request.Method, params.URL.RequestURI())
+	}
+}
+
 // Server is a CryptoChat server
 type Server struct {
-	db *sql.DB
+	db    *sql.DB
+	stmts sqlStmts
 
 	cert *tls.Certificate
 	api  http.Server
 
 	ui     http.Server
 	events *sse.Server
+
+	verification map[uuid.UUID]chan struct{}
+
+	peerAddr string
+	client   *http.Client
 }
 
 // NewServer creates a new Server
-func NewServer(dbPath string) (*Server, error) {
+func NewServer(dbPath, peerAddr string) (*Server, error) {
 	oldMask := -1
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		oldMask = unix.Umask(0066)
@@ -41,7 +61,10 @@ func NewServer(dbPath string) (*Server, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 	s := Server{
-		db: db,
+		db:       db,
+		peerAddr: peerAddr,
+
+		verification: make(map[uuid.UUID]chan struct{}),
 	}
 
 	if oldMask != -1 {
@@ -51,24 +74,57 @@ func NewServer(dbPath string) (*Server, error) {
 		unix.Umask(oldMask)
 	}
 
+	s.stmts, err = prepareSQLStatements(db)
+	if err != nil {
+		return nil, err
+	}
+
 	cert, err := s.loadCert()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load certificate: %w", err)
+	}
+	log.WithField("fingerprint", GetCertFingerprint(cert.Leaf)).Info("Loaded server certificate")
+
+	apiRouter := mux.NewRouter()
+	apiRouter.HandleFunc("/rooms/{room}/message", s.apiSendMessage).Methods(http.MethodPost)
+
 	s.api = http.Server{
 		TLSConfig: &tls.Config{
 			Certificates: []tls.Certificate{cert},
+
+			ClientAuth:            tls.RequestClientCert,
+			VerifyPeerCertificate: s.verifyPeer,
 		},
+		Handler: handlers.CustomLoggingHandler(nil, apiRouter, writeAccessLog("api")),
 	}
 	s.cert = &s.api.TLSConfig.Certificates[0]
 
 	uiRouter := mux.NewRouter()
 
+	uiAPI := uiRouter.PathPrefix("/api").Subrouter()
+	uiAPI.HandleFunc("/users/{uuid}/verify", s.uiVerifyUser).Methods(http.MethodPost)
+	uiAPI.HandleFunc("/rooms/{room}/message", s.uiSendMessage).Methods(http.MethodPost)
+
 	s.events = sse.New()
+	s.events.CreateStream(streamVerification)
 	s.events.CreateStream(streamMessages)
-	uiRouter.HandleFunc("/api/events", s.events.HTTPHandler).Methods(http.MethodGet)
+	uiAPI.HandleFunc("/events", s.events.HTTPHandler).Methods(http.MethodGet)
 
 	uiRouter.PathPrefix("/").Handler(newSPAHandler())
 
 	s.ui = http.Server{
-		Handler: uiRouter,
+		Handler: handlers.CustomLoggingHandler(nil, uiRouter, writeAccessLog("ui")),
+	}
+
+	s.client = &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				Certificates: []tls.Certificate{cert},
+
+				InsecureSkipVerify:    true,
+				VerifyPeerCertificate: s.verifyPeer,
+			},
+		},
 	}
 
 	return &s, nil

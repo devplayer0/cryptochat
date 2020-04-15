@@ -16,8 +16,8 @@ dev: client/css/bootstrap.min.css
 
 	go mod download
 	go-bindata -debug $(BINDATA_FLAGS)
-	CGO_ENABLED=1 CompileDaemon -exclude-dir=.git -build="go build -o bin/cryptochat ./cmd/cryptochat" -command=bin/cryptochat \
-    	-graceful-kill
+	CGO_ENABLED=1 CompileDaemon -exclude-dir=.git -build="go build -o bin/cryptochat ./cmd/cryptochat" \
+		-command="bin/cryptochat -log debug" -graceful-kill
 
 binary: client/css/bootstrap.min.css
 	curl -fo client/js/vue.js "https://cdn.jsdelivr.net/npm/vue@$(VUE_VERSION)/dist/vue.min.js"

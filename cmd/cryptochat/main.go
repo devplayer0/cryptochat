@@ -11,15 +11,23 @@ import (
 )
 
 var (
-	dbPath = flag.String("db", "data.db", "path to sqlite database file")
-	addr   = flag.String("addr", ":9443", "api listen address")
-	uiAddr = flag.String("uiaddr", "127.0.0.1:9080", "ui listen address")
+	logLevel = flag.String("log", "info", "log level")
+	dbPath   = flag.String("db", "data.db", "path to sqlite database file")
+	addr     = flag.String("addr", ":9443", "api listen address")
+	uiAddr   = flag.String("uiaddr", "127.0.0.1:9080", "ui listen address")
+	peerAddr = flag.String("peeraddr", "127.0.0.1:10443", "peer address")
 )
 
 func main() {
 	flag.Parse()
 
-	srv, err := server.NewServer(*dbPath)
+	level, err := log.ParseLevel(*logLevel)
+	if err != nil {
+		log.WithError(err).Fatal("Failed to parse log level")
+	}
+	log.SetLevel(level)
+
+	srv, err := server.NewServer(*dbPath, *peerAddr)
 	if err != nil {
 		log.WithError(err).Fatal("Failed to start server")
 	}
