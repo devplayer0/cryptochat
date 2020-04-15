@@ -166,8 +166,8 @@ func (s *Server) uiSendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, m := range members {
-		if err := JSONReq(s.client, http.MethodPost, fmt.Sprintf("https://%v/rooms/%v/message", m.Addr, vars["room"]),
-			req, nil); err != nil {
+		if err := JSONReq(s.client, http.MethodPost, fmt.Sprintf("https://%v:%v/rooms/%v/message", m.Addr.IP,
+			m.Addr.Port, vars["room"]), req, nil); err != nil {
 			log.WithFields(log.Fields{
 				"id":      m.UUID.String(),
 				"address": m.Addr,

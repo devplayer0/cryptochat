@@ -59,7 +59,7 @@ func JSONReq(c *http.Client, method, url string, b interface{}, r interface{}) e
 
 	req, err := http.NewRequest(method, url, bytes.NewBuffer(body))
 	if err != nil {
-		return fmt.Errorf("failed to create HTTP request")
+		return fmt.Errorf("failed to create HTTP request: %w", err)
 	}
 
 	req.Header.Add("Content-Type", "application/json")
