@@ -75,15 +75,11 @@ func (s *Server) publishJSON(stream string, v interface{}) error {
 	return nil
 }
 
-type uiMessageSender struct {
-	UUID     string `json:"uuid"`
-	Username string `json:"username"`
-}
-type uiEventMessage struct {
-	Sender uiMessageSender `json:"sender"`
-
-	Room    string `json:"room"`
-	Content string `json:"content"`
+func (s *Server) uiInfo(w http.ResponseWriter, r *http.Request) {
+	JSONResponse(w, verificationInfo{
+		UUID:        s.cert.Leaf.Subject.CommonName,
+		Fingerprint: GetCertFingerprint(s.cert.Leaf),
+	}, http.StatusOK)
 }
 
 func (s *Server) uiVerifyUser(w http.ResponseWriter, r *http.Request) {
@@ -139,6 +135,17 @@ func (s *Server) uiRoomEdit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+type uiMessageSender struct {
+	UUID     string `json:"uuid"`
+	Username string `json:"username"`
+}
+type uiEventMessage struct {
+	Sender uiMessageSender `json:"sender"`
+
+	Room    string `json:"room"`
+	Content string `json:"content"`
 }
 
 func (s *Server) uiSendMessage(w http.ResponseWriter, r *http.Request) {

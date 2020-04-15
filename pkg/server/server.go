@@ -140,6 +140,7 @@ func NewServer(dbPath string) (*Server, error) {
 	uiRouter := mux.NewRouter()
 
 	uiAPI := uiRouter.PathPrefix("/api").Subrouter()
+	uiAPI.HandleFunc("/info", s.uiInfo).Methods(http.MethodGet)
 	uiAPI.HandleFunc("/users/{uuid}/verify", s.uiVerifyUser).Methods(http.MethodPost)
 	uiAPI.HandleFunc("/rooms", s.uiRooms).Methods(http.MethodGet)
 	uiAPI.HandleFunc("/rooms/{room}", s.uiRoomEdit).Methods(http.MethodPost, http.MethodDelete)
