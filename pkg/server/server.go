@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -68,7 +69,8 @@ type Server struct {
 	ui     http.Server
 	events *sse.Server
 
-	verification map[uuid.UUID]chan struct{}
+	verificationLock sync.RWMutex
+	verification     map[uuid.UUID]chan struct{}
 
 	peerAddr string
 	client   *http.Client

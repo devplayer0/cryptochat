@@ -94,12 +94,19 @@ func (s *Server) uiVerifyUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if ch, ok := s.verification[u.UUID]; ok {
+	s.verificationLock.RLock()
+	ch, ok := s.verification[u.UUID]
+	s.verificationLock.RUnlock()
+	if ok {
 		if err := s.markUserVerified(&u); err != nil {
 			JSONErrResponse(w, fmt.Errorf("failed"), http.StatusInternalServerError)
 			return
 		}
+
+		s.verificationLock.Lock()
 		delete(s.verification, u.UUID)
+		s.verificationLock.Unlock()
+
 		close(ch)
 
 		log.WithField("uuid", vars["uuid"]).Info("Marked user as verified")

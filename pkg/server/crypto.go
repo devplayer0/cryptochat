@@ -109,15 +109,25 @@ func (s *Server) verifyPeer(certs [][]byte, _ [][]*x509.Certificate) error {
 
 	if !u.Verified {
 		log.WithField("uuid", u.UUID.String()).Debug("Waiting for user verification")
-		if _, ok := s.verification[u.UUID]; !ok {
+		s.verificationLock.RLock()
+		_, ok := s.verification[u.UUID]
+		s.verificationLock.RUnlock()
+		if !ok {
+			s.verificationLock.Lock()
 			s.verification[u.UUID] = make(chan struct{}, 1)
+			s.verificationLock.Unlock()
+
 			s.publishJSON(streamVerification, verificationInfo{
 				UUID:        u.UUID.String(),
 				Fingerprint: GetCertFingerprint(u.Cert),
 			})
 		}
 
-		<-s.verification[u.UUID]
+		s.verificationLock.RLock()
+		ch := s.verification[u.UUID]
+		s.verificationLock.RUnlock()
+
+		<-ch
 		u, err := s.userForCert(certs[0])
 		if err != nil {
 			return err
